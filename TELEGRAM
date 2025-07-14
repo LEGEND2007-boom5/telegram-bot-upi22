@@ -1,0 +1,86 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters
+
+BOT_TOKEN = "7670109080:AAHlMJIYqDgx1DhsxfMSw3MVL8yKsAwYgbE"
+ADMIN_ID = 7698915005
+CHANNELS = [
+    "@ANIMEFORHINDIDUB",
+    "@youtubesubcribe001",
+    "@Comedyking002"
+]
+
+user_wallet = {}
+user_step = {}
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("✅ Verify", callback_data="verify")]]
+    message = (
+        "🎉 *Welcome to Free UPI Cash Bot!*\n\n"
+        "💰 Join the channels below to earn ₹15:\n\n"
+        f"📢 *CHANNEL 1:*\n🔗 [ANIMEFORHINDIDUB](https://t.me/{CHANNELS[0][1:]})\n\n"
+        f"📢 *CHANNEL 2:*\n🔗 [YouTube Subscribe](https://t.me/{CHANNELS[1][1:]})\n\n"
+        f"📢 *CHANNEL 3:*\n🔗 [Comedy King](https://t.me/{CHANNELS[2][1:]})\n\n"
+        "👉 After joining all, click below to verify ⬇️"
+    )
+    await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    joined = 0
+
+    for ch in CHANNELS:
+        try:
+            member = await context.bot.get_chat_member(chat_id=ch, user_id=user_id)
+            if member.status in ["member", "administrator", "creator"]:
+                joined += 1
+        except:
+            pass
+
+    if joined == len(CHANNELS):
+        user_wallet[user_id] = user_wallet.get(user_id, 0) + 15
+        await query.message.reply_text("✅ Verified! ₹15 added to your wallet.")
+    else:
+        await query.message.reply_text("❌ You haven't joined all required channels.")
+
+async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    balance = user_wallet.get(user_id, 0)
+    await update.message.reply_text(f"👛 Wallet Balance: ₹{balance}\n\nType /withdraw to withdraw (Min ₹100)")
+
+async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_wallet.get(user_id, 0) >= 100:
+        user_step[user_id] = "awaiting_upi"
+        await update.message.reply_text("🧾 Please enter your UPI ID to withdraw:")
+    else:
+        await update.message.reply_text("❌ Minimum ₹100 required to withdraw.\nEarn more by joining channels!")
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username or "NoUsername"
+    text = update.message.text
+
+    if user_step.get(user_id) == "awaiting_upi":
+        user_step[user_id] = None
+        amount = user_wallet.get(user_id, 0)
+        user_wallet[user_id] = 0
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"🤑 Withdraw Request:\n👤 User: @{username}\n💸 UPI ID: {text}\nAmount: ₹{amount}"
+        )
+
+        await update.message.reply_text("✅ Withdrawal request sent. Please wait for manual transfer.")
+    else:
+        await update.message.reply_text("ℹ️ Type /withdraw to start withdrawal process.")
+
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("wallet", wallet))
+app.add_handler(CommandHandler("withdraw", withdraw))
+app.add_handler(CallbackQueryHandler(verify))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+print("🤖 Bot Running...")
+app.run_polling()
